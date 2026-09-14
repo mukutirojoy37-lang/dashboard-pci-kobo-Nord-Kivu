@@ -96,13 +96,13 @@ else:
 
     # --- CALCUL DES INDICATEURS CLÉS (Avec des libellés clairs et courts pour l'axe X) ---
     indicators_mapping = [
-        ("PPL Ébola", "Proportion des PPL infectés (Ebola)", "ppl"),
+        ("PPL Infecté à la MVE", "Proportion des PPL infectés (Ebola)", "ppl"),
         ("Non PPL MVE", "Proportion non PPL (MVE dans ESS)", "non_ppl"),
         ("Score ESS > 80%", "Proportion ESS score > 80%", "score"),
-        ("Kit PCI", "Proportion ESS avec Kit PCI", "kit"),
-        ("Triage", "Proportion ESS triage unidirectionnel", "triage"),
-        ("Cas Décontaminés 48h", "Cas confirmés décontaminés en 48h", "decont"),
-        ("Personnel Formé", "Personnel de santé formé en PCI", "forme")
+        ("Dotation en Kit PCI", "Proportion ESS avec Kit PCI", "kit"),
+        ("Triage fonctionnel", "Proportion ESS triage unidirectionnel", "triage"),
+        ("ESS Décontaminés dans le 48h", "Cas confirmés décontaminés en 48h", "decont"),
+        ("PPL Formé", "Personnel de santé formé en PCI", "forme")
     ]
 
     table_data = []
