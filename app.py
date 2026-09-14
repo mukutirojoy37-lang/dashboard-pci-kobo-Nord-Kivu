@@ -193,7 +193,7 @@ else:
             text="Valeur",
             color="Valeur",
             color_continuous_scale="Blues",
-            title="Taux de Réalisation Global par Indicateur Logistique (%)"
+            title="Taux de Réalisation Global par Indicateur (%)"
         )
         fig_hist_pct.update_traces(texttemplate='%{text}%', textposition='outside')
         fig_hist_pct.update_layout(
