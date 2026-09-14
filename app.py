@@ -23,8 +23,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("📊 Nord/Kivu - Tableau de Bord PCI/WASH — Suivi Opérationnel")
-st.markdown("Pilotage en temps réel des indicateurs clés par Hub et par Zone de Santé.")
+st.title("📊 Tableau de Bord PCI/WASH — Suivi Opérationnel")
+st.markdown("Pilotage en temps réel des indicateurs clés par Hub et par Zone de Santé (KoboToolbox).")
 
 # Paramètres API Kobo
 API_TOKEN = "d64887bad92383b600f2f520c44b0bc7c778c595"
@@ -94,10 +94,10 @@ else:
     with c4:
         st.markdown(f'<div class="metric-card"><div class="metric-title">Connexion API</div><div class="metric-value" style="color: #10b981;">🟢 Active</div></div>', unsafe_allow_html=True)
 
-    # --- CALCUL DES INDICATEURS CLÉS (Gestion spécifique pour PPL et Non-PPL : pas de cible planifiée) ---
+    # --- CALCUL DES INDICATEURS CLÉS ---
     indicators_mapping = [
-        ("Nbre PPL Infecté (Ebola)", "ppl", False),        # False = pas de cible, juste le dénombrement réalisé
-        ("Nbre non PPL Infecté (MVE)", "non_ppl", False),   # False = pas de cible, juste le dénombrement réalisé
+        ("Nbre PPL Infecté (Ebola)", "ppl", False),
+        ("Nbre non PPL Infecté (MVE)", "non_ppl", False),
         ("Score ESS > 80%", "score", True),
         ("Dotation en Kit PCI", "kit", True),
         ("Triage fonctionnel", "triage", True),
@@ -129,7 +129,6 @@ else:
             })
             chart_data.append({"Indicateur": short_label, "Valeur": taux, "Type": "Pourcentage"})
         else:
-            # Pour les cas infectés (PPL / non PPL) : pas de cible, on affiche uniquement le cumul réalisé
             if len(matching_cols) >= 2:
                 val_r = float(df_filtered[matching_cols[1]].sum())
             elif len(matching_cols) == 1:
@@ -137,12 +136,11 @@ else:
             
             table_data.append({
                 "Indicateur Clé PCI / WASH": short_label,
-                "Cible / Planifié": "—",  # Pas de planification pour des cas de maladie
+                "Cible / Planifié": "—",
                 "Réalisé": int(val_r),
                 "Taux de Réalisation (%)": "N/A (Cas constatés)"
             })
-            # Pour l'histogramme, on peut afficher le volume brut réalisé ou le mettre à 0/exclu du taux
-            chart_data.append({"Indicateur": short_label, "Valeur": val_r, "Type": "Volume Cas"})
+            chart_data.append({"Indicateur": short_label, "Valeur": int(val_r), "Type": "Cas Constatés"})
 
     df_indicators = pd.DataFrame(table_data)
     df_chart = pd.DataFrame(chart_data)
@@ -155,28 +153,51 @@ else:
         st.dataframe(df_indicators, use_container_width=True, hide_index=True)
 
     with tab2:
-        st.markdown("### 📊 Synthèse des Indicateurs (Pourcentages & Cas Constatés)")
-        
-        # Filtrer pour l'histogramme uniquement les taux en pourcentage (ou afficher les deux proprement)
+        # 1. Graphique des Taux (%)
+        st.markdown("### 📊 Synthèse des Taux de Réalisation (%)")
         df_pct = df_chart[df_chart["Type"] == "Pourcentage"]
         
-        fig_hist = px.bar(
+        fig_hist_pct = px.bar(
             df_pct, 
             x="Indicateur", 
             y="Valeur", 
             text="Valeur",
             color="Valeur",
             color_continuous_scale="Blues",
-            title="Taux de Réalisation Global par Indicateur (%)"
+            title="Taux de Réalisation Global par Indicateur Logistique (%)"
         )
-        fig_hist.update_traces(texttemplate='%{text}%', textposition='outside')
-        fig_hist.update_layout(
+        fig_hist_pct.update_traces(texttemplate='%{text}%', textposition='outside')
+        fig_hist_pct.update_layout(
             xaxis_tickangle=0,
-            xaxis_title="Indicateurs Clés PCI / WASH",
+            xaxis_title="Indicateurs Logistiques PCI / WASH",
             yaxis_title="Pourcentage (%)",
             yaxis_range=[0, max(110, df_pct["Valeur"].max() + 15)]
         )
-        st.plotly_chart(fig_hist, use_container_width=True)
+        st.plotly_chart(fig_hist_pct, use_container_width=True)
+
+        st.markdown("---")
+
+        # 2. Graphique séparé pour les Cas Constatés (PPL / Non-PPL)
+        st.markdown("### 🦠 Dénombrement des Cas Constatés (PPL & Non-PPL Infectés)")
+        df_cas = df_chart[df_chart["Type"] == "Cas Constatés"]
+        
+        fig_hist_cas = px.bar(
+            df_cas, 
+            x="Indicateur", 
+            y="Valeur", 
+            text="Valeur",
+            color="Indicateur",
+            color_discrete_sequence=["#ef4444", "#f97316"], # Couleurs distinctes pour les cas épidémiologiques
+            title="Nombre Total de Cas Constatés (Sans Cible Planifiée)"
+        )
+        fig_hist_cas.update_traces(texttemplate='%{text}', textposition='outside')
+        fig_hist_cas.update_layout(
+            xaxis_tickangle=0,
+            xaxis_title="Indicateurs Épidémiologiques",
+            yaxis_title="Nombre de Cas",
+            yaxis_range=[0, max(10, df_cas["Valeur"].max() + 5)]
+        )
+        st.plotly_chart(fig_hist_cas, use_container_width=True)
 
         st.markdown("---")
         col_g1, col_g2 = st.columns(2)
