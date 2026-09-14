@@ -23,7 +23,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("📊 Tableau de Bord PCI/WASH — Suivi Opérationnel")
+st.title("📊 Nord/Kivu - Tableau de Bord PCI/WASH — Suivi Opérationnel")
 st.markdown("Pilotage en temps réel des indicateurs clés par Hub et par Zone de Santé (KoboToolbox).")
 
 # Paramètres API Kobo
