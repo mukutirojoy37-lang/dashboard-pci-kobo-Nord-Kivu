@@ -49,29 +49,27 @@ with st.spinner("Chargement des données en direct..."):
 if df.empty:
     st.warning("⚠️ Aucune donnée récupérée pour le moment. Vérifiez vos soumissions sur KoboToolbox.")
 else:
-    # Détection dynamique des colonnes Hub et Zone de Santé
+    # Détection sécurisée des colonnes Hub et Zone de Santé
     hub_col = next((col for col in df.columns if 'hub' in col.lower() or 'anten' in col.lower()), None)
     zs_col = next((col for col in df.columns if 'zone' in col.lower() or 'zs' in col.lower()), None)
 
     # --- BARRE LATÉRALE DE FILTRAGE ---
     st.sidebar.header("🔍 Filtres & Paramètres")
     
+    df_filtered = df.copy()
     selected_hub = "Tous"
+    
     if hub_col:
         hubs = list(df[hub_col].dropna().unique())
         selected_hub = st.sidebar.selectbox("Filtrer par Hub", ["Tous"] + hubs)
         if selected_hub != "Tous":
-            df_filtered = df[df[hub_col] == selected_hub]
-    else:
-        df_filtered = df
+            df_filtered = df_filtered[df_filtered[hub_col] == selected_hub]
 
     if zs_col:
         zs_list = list(df_filtered[zs_col].dropna().unique())
         selected_zs = st.sidebar.selectbox("Filtrer par Zone de Santé", ["Toutes"] + zs_list)
         if selected_zs != "Toutes":
             df_filtered = df_filtered[df_filtered[zs_col] == selected_zs]
-    else:
-        df_filtered = df_filtered
 
     # --- EN-TÊTE DE SYNTHÈSE ---
     st.markdown("### 📌 Synthèse Générale")
@@ -79,15 +77,15 @@ else:
     with c1:
         st.markdown(f'<div class="metric-card"><div class="metric-title">Total Rapports</div><div class="metric-value">{len(df_filtered)}</div></div>', unsafe_allow_html=True)
     with c2:
-        hubs_count = df_filtered[hub_col].nunique() if hub_col else 0
+        hubs_count = df_filtered[hub_col].nunique() if hub_col and hub_col in df_filtered.columns else 0
         st.markdown(f'<div class="metric-card"><div class="metric-title">Hubs Actifs</div><div class="metric-value">{hubs_count}</div></div>', unsafe_allow_html=True)
     with c3:
-        zs_count = df_filtered[zs_col].nunique() if zs_col else 0
+        zs_count = df_filtered[zs_col].nunique() if zs_col and zs_col in df_filtered.columns else 0
         st.markdown(f'<div class="metric-card"><div class="metric-title">Zones de Santé</div><div class="metric-value">{zs_count}</div></div>', unsafe_allow_html=True)
     with c4:
         st.markdown(f'<div class="metric-card"><div class="metric-title">Connexion API</div><div class="metric-value" style="color: #10b981;">🟢 Active</div></div>', unsafe_allow_html=True)
 
-    # --- CALCUL EXACT DES INDICATEURS CLÉS (Basé sur les vraies colonnes Kobo) ---
+    # --- CALCUL DES INDICATEURS CLÉS ---
     indicators_mapping = [
         ("Proportion des PPL infectés parmi les cas confirmés d'Ebola", "planifie_ppl", "realise_ppl"),
         ("Proportion d'individus (non PPL) ayant contracté la MVE dans les ESS", "planifie_non_ppl", "realise_non_ppl"),
@@ -100,11 +98,9 @@ else:
 
     table_data = []
     for label, key_p, key_r in indicators_mapping:
-        # Recherche des colonnes correspondantes dans le DataFrame Kobo
         matched_p = next((c for c in df_filtered.columns if key_p in c.lower() or key_p.split('_')[1] in c.lower()), None)
         matched_r = next((c for c in df_filtered.columns if key_r in c.lower() or key_r.split('_')[1] in c.lower()), None)
         
-        # Calcul des vraies sommes de terrain
         val_p = float(df_filtered[matched_p].sum()) if matched_p and pd.api.types.is_numeric_dtype(df_filtered[matched_p]) else 0.0
         val_r = float(df_filtered[matched_r].sum()) if matched_r and pd.api.types.is_numeric_dtype(df_filtered[matched_r]) else 0.0
         
