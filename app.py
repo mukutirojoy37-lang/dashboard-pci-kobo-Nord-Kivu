@@ -2,10 +2,12 @@ import streamlit as st
 import pandas as pd
 import requests
 import plotly.express as px
+import plotly.graph_objects as go
 
 # Configuration de la page
 st.set_page_config(page_title="Dashboard PCI/WASH - Nord-Kivu", layout="wide", initial_sidebar_state="expanded")
 
+# Design CSS professionnel et épuré
 st.markdown("""
     <style>
         .main { background-color: #f8f9fa; }
@@ -49,9 +51,8 @@ with st.spinner("Chargement des données en direct..."):
 if df.empty:
     st.warning("⚠️ Aucune donnée récupérée pour le moment. Vérifiez vos soumissions sur KoboToolbox.")
 else:
-    # Nettoyage et conversion automatique des colonnes numériques potentiellement texte
+    # Nettoyage et conversion numérique automatique
     for col in df.columns:
-        # Tente de convertir en numérique si ce sont des chiffres enregistrés comme texte
         try:
             converted = pd.to_numeric(df[col], errors='coerce')
             if converted.notnull().sum() > 0:
@@ -59,7 +60,6 @@ else:
         except Exception:
             pass
 
-    # Détection dynamique et intelligente des colonnes clés
     hub_col = next((col for col in df.columns if 'hub' in col.lower() or 'anten' in col.lower()), None)
     zs_col = next((col for col in df.columns if 'zone' in col.lower() or 'zs' in col.lower()), None)
 
@@ -95,26 +95,23 @@ else:
     with c4:
         st.markdown(f'<div class="metric-card"><div class="metric-title">Connexion API</div><div class="metric-value" style="color: #10b981;">🟢 Active</div></div>', unsafe_allow_html=True)
 
-    # --- ASSOCIATION DES INDICATEURS CLÉS (Basée sur les libellés Kobo) ---
-    # Recherche automatique par mots-clés dans les colonnes du formulaire Kobo
+    # --- CALCUL DES INDICATEURS CLÉS ---
     indicators_mapping = [
-        ("Proportion des PPL infectés parmi les cas confirmés d'Ebola", "ppl"),
-        ("Proportion d'individus (non PPL) ayant contracté la MVE dans les ESS", "non_ppl"),
-        ("Proportion d'ESS ayant un score > 80%", "score"),
-        ("Proportion d'ESS ayant reçu un Kit PCI", "kit"),
-        ("Proportion d'ESS unidirectionnel disposant d'un triage", "triage"),
-        ("Proportion d'ESS ayant accueilli un cas confirmé décontaminé en 48h", "decont"),
-        ("Pourcentage du personnel de santé cible formé en PCI", "forme")
+        ("Proportion des PPL infectés (Ebola)", "ppl"),
+        ("Proportion non PPL (MVE dans ESS)", "non_ppl"),
+        ("Proportion ESS score > 80%", "score"),
+        ("Proportion ESS avec Kit PCI", "kit"),
+        ("Proportion ESS triage unidirectionnel", "triage"),
+        ("Cas confirmés décontaminés en 48h", "decont"),
+        ("Personnel de santé formé en PCI", "forme")
     ]
 
     table_data = []
     for label, keyword in indicators_mapping:
-        # Trouve toutes les colonnes numériques contenant le mot-clé (ex: planifié et réalisé)
         matching_cols = [c for c in df_filtered.select_dtypes(include=['number']).columns if keyword in c.lower()]
         
         val_p, val_r = 0.0, 0.0
         if len(matching_cols) >= 2:
-            # Souvent la 1ère colonne numérique est le planifié/cible et la 2ème le réalisé
             val_p = float(df_filtered[matching_cols[0]].sum())
             val_r = float(df_filtered[matching_cols[1]].sum())
         elif len(matching_cols) == 1:
@@ -126,29 +123,48 @@ else:
             "Indicateur Clé PCI / WASH": label,
             "Cible / Planifié": val_p,
             "Réalisé": val_r,
-            "Taux de Réalisation (%)": f"{taux}%"
+            "Taux (%)": taux
         })
 
     df_indicators = pd.DataFrame(table_data)
-    
-    st.markdown("---")
-    st.markdown(f"### 📋 Tableau des Indicateurs Clés ({'Global - Province' if selected_hub == 'Tous' else selected_hub})")
-    st.dataframe(df_indicators, use_container_width=True, hide_index=True)
 
-    # --- GRAPHIQUES ANALYTIQUES ---
-    st.markdown("---")
-    st.markdown("### 📈 Visualisations Graphiques")
-    
-    col_g1, col_g2 = st.columns(2)
-    with col_g1:
-        if hub_col:
-            fig_hub = px.pie(df, names=hub_col, title="Répartition proportionnelle par Hub", hole=0.5, color_discrete_sequence=px.colors.sequential.Blues_r)
-            st.plotly_chart(fig_hub, use_container_width=True)
-    with col_g2:
-        if zs_col:
-            fig_zs = px.bar(df_filtered, x=zs_col, color=hub_col if hub_col else None, title="Volume de soumissions par Zone de Santé", color_discrete_sequence=px.colors.qualitative.Prism)
-            st.plotly_chart(fig_zs, use_container_width=True)
+    # --- NAVIGATION PAR ONGLETS (STYLE PRO) ---
+    tab1, tab2, tab3 = st.tabs(["📋 Tableaux & Synthèse", "📈 Graphiques Avancés", "🔍 Données Brutes"])
 
-    # --- DONNÉES BRUTES ---
-    with st.expander("🔍 Afficher les soumissions Kobo brutes détaillées"):
-        st.dataframe(df_filtered)
+    with tab1:
+        st.markdown(f"### 📋 Tableau Détaillé des Indicateurs ({'Global' if selected_hub == 'Tous' else selected_hub})")
+        # Affichage avec formatage du pourcentage
+        df_display = df_indicators.copy()
+        df_display["Taux de Réalisation (%)"] = df_display["Taux (%)"].astype(str) + "%"
+        st.dataframe(df_display[["Indicateur Clé PCI / WASH", "Cible / Planifié", "Réalisé", "Taux de Réalisation (%)"]], use_container_width=True, hide_index=True)
+
+    with tab2:
+        st.markdown("### 📊 Synthèse Globale des Taux de Réalisation (%)")
+        # Histogramme professionnel des taux par indicateur
+        fig_hist = px.bar(
+            df_indicators, 
+            x="Indicateur Clé PCI / WASH", 
+            y="Taux (%)", 
+            text="Taux (%)",
+            color="Taux (%)",
+            color_continuous_scale="Blues",
+            title="Taux de Réalisation Global par Indicateur Clé (%)"
+        )
+        fig_hist.update_traces(texttemplate='%{text}%', textposition='outside')
+        fig_hist.update_layout(xaxis_tickangle=-15, yaxis_range=[0, max(100, df_indicators["Taux (%)"].max() + 10)])
+        st.plotly_chart(fig_hist, use_container_width=True)
+
+        st.markdown("---")
+        col_g1, col_g2 = st.columns(2)
+        with col_g1:
+            if hub_col:
+                fig_hub = px.pie(df, names=hub_col, title="Répartition proportionnelle par Hub", hole=0.5, color_discrete_sequence=px.colors.sequential.Blues_r)
+                st.plotly_chart(fig_hub, use_container_width=True)
+        with col_g2:
+            if zs_col:
+                fig_zs = px.bar(df_filtered, x=zs_col, color=hub_col if hub_col else None, title="Volume de soumissions par Zone de Santé", color_discrete_sequence=px.colors.qualitative.Prism)
+                st.plotly_chart(fig_zs, use_container_width=True)
+
+    with tab3:
+        st.markdown("### 🔍 Base de Données Kobo Détaillée")
+        st.dataframe(df_filtered, use_container_width=True)
