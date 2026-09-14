@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import requests
 import plotly.express as px
-import plotly.graph_objects as go
 
 # Configuration de la page
 st.set_page_config(page_title="Dashboard PCI/WASH - Nord-Kivu", layout="wide", initial_sidebar_state="expanded")
@@ -95,19 +94,19 @@ else:
     with c4:
         st.markdown(f'<div class="metric-card"><div class="metric-title">Connexion API</div><div class="metric-value" style="color: #10b981;">🟢 Active</div></div>', unsafe_allow_html=True)
 
-    # --- CALCUL DES INDICATEURS CLÉS ---
+    # --- CALCUL DES INDICATEURS CLÉS (Avec des libellés clairs et courts pour l'axe X) ---
     indicators_mapping = [
-        ("Proportion des PPL infectés (Ebola)", "ppl"),
-        ("Proportion non PPL (MVE dans ESS)", "non_ppl"),
-        ("Proportion ESS score > 80%", "score"),
-        ("Proportion ESS avec Kit PCI", "kit"),
-        ("Proportion ESS triage unidirectionnel", "triage"),
-        ("Cas confirmés décontaminés en 48h", "decont"),
-        ("Personnel de santé formé en PCI", "forme")
+        ("PPL Ébola", "Proportion des PPL infectés (Ebola)", "ppl"),
+        ("Non PPL MVE", "Proportion non PPL (MVE dans ESS)", "non_ppl"),
+        ("Score ESS > 80%", "Proportion ESS score > 80%", "score"),
+        ("Kit PCI", "Proportion ESS avec Kit PCI", "kit"),
+        ("Triage", "Proportion ESS triage unidirectionnel", "triage"),
+        ("Cas Décontaminés 48h", "Cas confirmés décontaminés en 48h", "decont"),
+        ("Personnel Formé", "Personnel de santé formé en PCI", "forme")
     ]
 
     table_data = []
-    for label, keyword in indicators_mapping:
+    for short_label, full_label, keyword in indicators_mapping:
         matching_cols = [c for c in df_filtered.select_dtypes(include=['number']).columns if keyword in c.lower()]
         
         val_p, val_r = 0.0, 0.0
@@ -120,7 +119,8 @@ else:
         taux = round((val_r / val_p) * 100, 1) if val_p > 0 else 0.0
         
         table_data.append({
-            "Indicateur Clé PCI / WASH": label,
+            "Indicateur Clé PCI / WASH": full_label,
+            "Label Court": short_label,
             "Cible / Planifié": val_p,
             "Réalisé": val_r,
             "Taux (%)": taux
@@ -128,22 +128,22 @@ else:
 
     df_indicators = pd.DataFrame(table_data)
 
-    # --- NAVIGATION PAR ONGLETS (STYLE PRO) ---
+    # --- NAVIGATION PAR ONGLETS ---
     tab1, tab2, tab3 = st.tabs(["📋 Tableaux & Synthèse", "📈 Graphiques Avancés", "🔍 Données Brutes"])
 
     with tab1:
         st.markdown(f"### 📋 Tableau Détaillé des Indicateurs ({'Global' if selected_hub == 'Tous' else selected_hub})")
-        # Affichage avec formatage du pourcentage
         df_display = df_indicators.copy()
         df_display["Taux de Réalisation (%)"] = df_display["Taux (%)"].astype(str) + "%"
         st.dataframe(df_display[["Indicateur Clé PCI / WASH", "Cible / Planifié", "Réalisé", "Taux de Réalisation (%)"]], use_container_width=True, hide_index=True)
 
     with tab2:
         st.markdown("### 📊 Synthèse Globale des Taux de Réalisation (%)")
-        # Histogramme professionnel des taux par indicateur
+        
+        # Histogramme avec axe X parfaitement droit et lisible (tickangle=0)
         fig_hist = px.bar(
             df_indicators, 
-            x="Indicateur Clé PCI / WASH", 
+            x="Label Court", 
             y="Taux (%)", 
             text="Taux (%)",
             color="Taux (%)",
@@ -151,7 +151,12 @@ else:
             title="Taux de Réalisation Global par Indicateur Clé (%)"
         )
         fig_hist.update_traces(texttemplate='%{text}%', textposition='outside')
-        fig_hist.update_layout(xaxis_tickangle=-15, yaxis_range=[0, max(100, df_indicators["Taux (%)"].max() + 10)])
+        fig_hist.update_layout(
+            xaxis_tickangle=0,  # Texte bien droit et horizontal
+            xaxis_title="Indicateurs Clés PCI / WASH",
+            yaxis_title="Pourcentage (%)",
+            yaxis_range=[0, max(110, df_indicators["Taux (%)"].max() + 15)]
+        )
         st.plotly_chart(fig_hist, use_container_width=True)
 
         st.markdown("---")
