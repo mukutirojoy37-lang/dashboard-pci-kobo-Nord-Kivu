@@ -23,7 +23,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("📊 Nord/Kivu - Dashboard des Indicateurs PCI/WASH — Suivi Opérationnel")
+st.title("📊 Nord/Kivu - Tableau de Bord PCI/WASH — Suivi Opérationnel")
 st.markdown("Pilotage en temps réel des indicateurs clés par Hub et par Zone de Santé.")
 
 # Paramètres API Kobo
@@ -94,68 +94,87 @@ else:
     with c4:
         st.markdown(f'<div class="metric-card"><div class="metric-title">Connexion API</div><div class="metric-value" style="color: #10b981;">🟢 Active</div></div>', unsafe_allow_html=True)
 
-    # --- CALCUL DES INDICATEURS CLÉS (Avec des libellés clairs et courts pour l'axe X) ---
+    # --- CALCUL DES INDICATEURS CLÉS (Gestion spécifique pour PPL et Non-PPL : pas de cible planifiée) ---
     indicators_mapping = [
-        ("Nbre PPL Infecté (MVE)", "Nbre des PPL infectés (Ebola)", "ppl"),
-        ("Nbre non PPL Infecté (MVE)", "Nbre non PPL (MVE dans ESS)", "non_ppl"),
-        ("Score ESS > 80%", "Proportion ESS score > 80%", "score"),
-        ("Dotation en Kit PCI", "Proportion ESS avec Kit PCI", "kit"),
-        ("Triage fonctionnel", "Proportion ESS triage unidirectionnel", "triage"),
-        ("ESS Décontaminés (48h)", "Cas confirmés décontaminés en 48h", "decont"),
-        ("PPL Formé", "Personnel de santé formé en PCI", "forme")
+        ("Nbre PPL Infecté (Ebola)", "ppl", False),        # False = pas de cible, juste le dénombrement réalisé
+        ("Nbre non PPL Infecté (MVE)", "non_ppl", False),   # False = pas de cible, juste le dénombrement réalisé
+        ("Score ESS > 80%", "score", True),
+        ("Dotation en Kit PCI", "kit", True),
+        ("Triage fonctionnel", "triage", True),
+        ("ESS Décontaminés (48h)", "decont", True),
+        ("PPL Formé", "forme", True)
     ]
 
     table_data = []
-    for short_label, full_label, keyword in indicators_mapping:
+    chart_data = []
+
+    for short_label, keyword, has_target in indicators_mapping:
         matching_cols = [c for c in df_filtered.select_dtypes(include=['number']).columns if keyword in c.lower()]
         
         val_p, val_r = 0.0, 0.0
-        if len(matching_cols) >= 2:
-            val_p = float(df_filtered[matching_cols[0]].sum())
-            val_r = float(df_filtered[matching_cols[1]].sum())
-        elif len(matching_cols) == 1:
-            val_r = float(df_filtered[matching_cols[0]].sum())
-
-        taux = round((val_r / val_p) * 100, 1) if val_p > 0 else 0.0
-        
-        table_data.append({
-            "Indicateur Clé PCI / WASH": full_label,
-            "Label Court": short_label,
-            "Cible / Planifié": val_p,
-            "Réalisé": val_r,
-            "Taux (%)": taux
-        })
+        if has_target:
+            if len(matching_cols) >= 2:
+                val_p = float(df_filtered[matching_cols[0]].sum())
+                val_r = float(df_filtered[matching_cols[1]].sum())
+            elif len(matching_cols) == 1:
+                val_r = float(df_filtered[matching_cols[0]].sum())
+            
+            taux = round((val_r / val_p) * 100, 1) if val_p > 0 else 0.0
+            
+            table_data.append({
+                "Indicateur Clé PCI / WASH": short_label,
+                "Cible / Planifié": int(val_p),
+                "Réalisé": int(val_r),
+                "Taux de Réalisation (%)": f"{taux}%"
+            })
+            chart_data.append({"Indicateur": short_label, "Valeur": taux, "Type": "Pourcentage"})
+        else:
+            # Pour les cas infectés (PPL / non PPL) : pas de cible, on affiche uniquement le cumul réalisé
+            if len(matching_cols) >= 2:
+                val_r = float(df_filtered[matching_cols[1]].sum())
+            elif len(matching_cols) == 1:
+                val_r = float(df_filtered[matching_cols[0]].sum())
+            
+            table_data.append({
+                "Indicateur Clé PCI / WASH": short_label,
+                "Cible / Planifié": "—",  # Pas de planification pour des cas de maladie
+                "Réalisé": int(val_r),
+                "Taux de Réalisation (%)": "N/A (Cas constatés)"
+            })
+            # Pour l'histogramme, on peut afficher le volume brut réalisé ou le mettre à 0/exclu du taux
+            chart_data.append({"Indicateur": short_label, "Valeur": val_r, "Type": "Volume Cas"})
 
     df_indicators = pd.DataFrame(table_data)
+    df_chart = pd.DataFrame(chart_data)
 
     # --- NAVIGATION PAR ONGLETS ---
     tab1, tab2, tab3 = st.tabs(["📋 Tableaux & Synthèse", "📈 Graphiques Avancés", "🔍 Données Brutes"])
 
     with tab1:
         st.markdown(f"### 📋 Tableau Détaillé des Indicateurs ({'Global' if selected_hub == 'Tous' else selected_hub})")
-        df_display = df_indicators.copy()
-        df_display["Taux de Réalisation (%)"] = df_display["Taux (%)"].astype(str) + "%"
-        st.dataframe(df_display[["Indicateur Clé PCI / WASH", "Cible / Planifié", "Réalisé", "Taux de Réalisation (%)"]], use_container_width=True, hide_index=True)
+        st.dataframe(df_indicators, use_container_width=True, hide_index=True)
 
     with tab2:
-        st.markdown("### 📊 Synthèse Globale des Taux de Réalisation (%)")
+        st.markdown("### 📊 Synthèse des Indicateurs (Pourcentages & Cas Constatés)")
         
-        # Histogramme avec axe X parfaitement droit et lisible (tickangle=0)
+        # Filtrer pour l'histogramme uniquement les taux en pourcentage (ou afficher les deux proprement)
+        df_pct = df_chart[df_chart["Type"] == "Pourcentage"]
+        
         fig_hist = px.bar(
-            df_indicators, 
-            x="Label Court", 
-            y="Taux (%)", 
-            text="Taux (%)",
-            color="Taux (%)",
+            df_pct, 
+            x="Indicateur", 
+            y="Valeur", 
+            text="Valeur",
+            color="Valeur",
             color_continuous_scale="Blues",
-            title="Taux de Réalisation Global par Indicateur Clé (%)"
+            title="Taux de Réalisation Global par Indicateur (%)"
         )
         fig_hist.update_traces(texttemplate='%{text}%', textposition='outside')
         fig_hist.update_layout(
-            xaxis_tickangle=0,  # Texte bien droit et horizontal
+            xaxis_tickangle=0,
             xaxis_title="Indicateurs Clés PCI / WASH",
             yaxis_title="Pourcentage (%)",
-            yaxis_range=[0, max(110, df_indicators["Taux (%)"].max() + 15)]
+            yaxis_range=[0, max(110, df_pct["Valeur"].max() + 15)]
         )
         st.plotly_chart(fig_hist, use_container_width=True)
 
