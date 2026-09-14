@@ -49,7 +49,17 @@ with st.spinner("Chargement des données en direct..."):
 if df.empty:
     st.warning("⚠️ Aucune donnée récupérée pour le moment. Vérifiez vos soumissions sur KoboToolbox.")
 else:
-    # Détection sécurisée des colonnes Hub et Zone de Santé
+    # Nettoyage et conversion automatique des colonnes numériques potentiellement texte
+    for col in df.columns:
+        # Tente de convertir en numérique si ce sont des chiffres enregistrés comme texte
+        try:
+            converted = pd.to_numeric(df[col], errors='coerce')
+            if converted.notnull().sum() > 0:
+                df[col] = converted
+        except Exception:
+            pass
+
+    # Détection dynamique et intelligente des colonnes clés
     hub_col = next((col for col in df.columns if 'hub' in col.lower() or 'anten' in col.lower()), None)
     zs_col = next((col for col in df.columns if 'zone' in col.lower() or 'zs' in col.lower()), None)
 
@@ -85,25 +95,31 @@ else:
     with c4:
         st.markdown(f'<div class="metric-card"><div class="metric-title">Connexion API</div><div class="metric-value" style="color: #10b981;">🟢 Active</div></div>', unsafe_allow_html=True)
 
-    # --- CALCUL DES INDICATEURS CLÉS ---
+    # --- ASSOCIATION DES INDICATEURS CLÉS (Basée sur les libellés Kobo) ---
+    # Recherche automatique par mots-clés dans les colonnes du formulaire Kobo
     indicators_mapping = [
-        ("Proportion des PPL infectés parmi les cas confirmés d'Ebola", "planifie_ppl", "realise_ppl"),
-        ("Proportion d'individus (non PPL) ayant contracté la MVE dans les ESS", "planifie_non_ppl", "realise_non_ppl"),
-        ("Proportion d'ESS ayant un score > 80%", "planifie_ess", "realise_ess"),
-        ("Proportion d'ESS ayant reçu un Kit PCI", "planifie_kit", "realise_kit"),
-        ("Proportion d'ESS unidirectionnel disposant d'un triage", "planifie_triage", "realise_triage"),
-        ("Proportion d'ESS ayant accueilli un cas confirmé décontaminé en 48h", "planifie_decont", "realise_decont"),
-        ("Pourcentage du personnel de santé cible formé en PCI", "planifie_forme", "realise_forme")
+        ("Proportion des PPL infectés parmi les cas confirmés d'Ebola", "ppl"),
+        ("Proportion d'individus (non PPL) ayant contracté la MVE dans les ESS", "non_ppl"),
+        ("Proportion d'ESS ayant un score > 80%", "score"),
+        ("Proportion d'ESS ayant reçu un Kit PCI", "kit"),
+        ("Proportion d'ESS unidirectionnel disposant d'un triage", "triage"),
+        ("Proportion d'ESS ayant accueilli un cas confirmé décontaminé en 48h", "decont"),
+        ("Pourcentage du personnel de santé cible formé en PCI", "forme")
     ]
 
     table_data = []
-    for label, key_p, key_r in indicators_mapping:
-        matched_p = next((c for c in df_filtered.columns if key_p in c.lower() or key_p.split('_')[1] in c.lower()), None)
-        matched_r = next((c for c in df_filtered.columns if key_r in c.lower() or key_r.split('_')[1] in c.lower()), None)
+    for label, keyword in indicators_mapping:
+        # Trouve toutes les colonnes numériques contenant le mot-clé (ex: planifié et réalisé)
+        matching_cols = [c for c in df_filtered.select_dtypes(include=['number']).columns if keyword in c.lower()]
         
-        val_p = float(df_filtered[matched_p].sum()) if matched_p and pd.api.types.is_numeric_dtype(df_filtered[matched_p]) else 0.0
-        val_r = float(df_filtered[matched_r].sum()) if matched_r and pd.api.types.is_numeric_dtype(df_filtered[matched_r]) else 0.0
-        
+        val_p, val_r = 0.0, 0.0
+        if len(matching_cols) >= 2:
+            # Souvent la 1ère colonne numérique est le planifié/cible et la 2ème le réalisé
+            val_p = float(df_filtered[matching_cols[0]].sum())
+            val_r = float(df_filtered[matching_cols[1]].sum())
+        elif len(matching_cols) == 1:
+            val_r = float(df_filtered[matching_cols[0]].sum())
+
         taux = round((val_r / val_p) * 100, 1) if val_p > 0 else 0.0
         
         table_data.append({
