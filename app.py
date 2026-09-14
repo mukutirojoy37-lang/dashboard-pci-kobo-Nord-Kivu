@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 import plotly.express as px
+from datetime import datetime
 
 # Configuration de la page
 st.set_page_config(page_title="Dashboard PCI/WASH - Nord-Kivu", layout="wide", initial_sidebar_state="expanded")
@@ -24,7 +25,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("📊 Nord/Kivu — Tableau de Bord PCI/WASH — Suivi Opérationnel")
-st.markdown("Pilotage en temps réel des indicateurs clés par Hub et par Zone de Santé.")
+st.markdown("Pilotage en temps réel des indicateurs clés par Hub, par Zone de Santé et par Période (KoboToolbox).")
 
 # Paramètres API Kobo
 API_TOKEN = "d64887bad92383b600f2f520c44b0bc7c778c595"
@@ -59,21 +60,49 @@ else:
         except Exception:
             pass
 
+    # Détection automatique des colonnes clés (Hub, Zone de Santé, Date)
     hub_col = next((col for col in df.columns if 'hub' in col.lower() or 'anten' in col.lower()), None)
     zs_col = next((col for col in df.columns if 'zone' in col.lower() or 'zs' in col.lower()), None)
+    date_col = next((col for col in df.columns if 'date' in col.lower() or 'time' in col.lower() or '_submission_time' in col.lower()), None)
+
+    # Conversion de la colonne de date en datetime si elle existe
+    if date_col:
+        df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
 
     # --- BARRE LATÉRALE DE FILTRAGE ---
     st.sidebar.header("🔍 Filtres & Paramètres")
     
     df_filtered = df.copy()
+
+    # 1. Filtre par Période (Date Range)
+    if date_col and df[date_col].notnull().sum() > 0:
+        min_date = df[date_col].min().date()
+        max_date = df[date_col].max().date()
+        
+        st.sidebar.subheader("📅 Période d'Évaluation")
+        date_range = st.sidebar.date_input(
+            "Sélectionnez l'intervalle",
+            value=(min_date, max_date),
+            min_value=min_date,
+            max_value=max_date
+        )
+        
+        if len(date_range) == 2:
+            start_date, end_date = date_range
+            df_filtered = df_filtered[
+                (df_filtered[date_col].dt.date >= start_date) & 
+                (df_filtered[date_col].dt.date <= end_date)
+            ]
+
+    # 2. Filtre par Hub
     selected_hub = "Tous"
-    
     if hub_col:
-        hubs = list(df[hub_col].dropna().unique())
+        hubs = list(df_filtered[hub_col].dropna().unique())
         selected_hub = st.sidebar.selectbox("Filtrer par Hub", ["Tous"] + hubs)
         if selected_hub != "Tous":
             df_filtered = df_filtered[df_filtered[hub_col] == selected_hub]
 
+    # 3. Filtre par Zone de Santé
     if zs_col:
         zs_list = list(df_filtered[zs_col].dropna().unique())
         selected_zs = st.sidebar.selectbox("Filtrer par Zone de Santé", ["Toutes"] + zs_list)
@@ -177,7 +206,7 @@ else:
 
         st.markdown("---")
 
-        # 2. Graphique séparé pour les Cas Constatés (PPL / Non-PPL)
+        # 2. Graphique séparé pour les Cas Constatés
         st.markdown("### 🦠 Dénombrement des Cas Constatés (PPL & Non-PPL Infectés)")
         df_cas = df_chart[df_chart["Type"] == "Cas Constatés"]
         
@@ -187,8 +216,8 @@ else:
             y="Valeur", 
             text="Valeur",
             color="Indicateur",
-            color_discrete_sequence=["#ef4444", "#f97316"], # Couleurs distinctes pour les cas épidémiologiques
-            title="Nombre Total de Cas Constatés (Sans Cible Planifiée)"
+            color_discrete_sequence=["#ef4444", "#f97316"],
+            title="Nombre Total de Cas Constatés sur la Période"
         )
         fig_hist_cas.update_traces(texttemplate='%{text}', textposition='outside')
         fig_hist_cas.update_layout(
@@ -203,7 +232,7 @@ else:
         col_g1, col_g2 = st.columns(2)
         with col_g1:
             if hub_col:
-                fig_hub = px.pie(df, names=hub_col, title="Répartition proportionnelle par Hub", hole=0.5, color_discrete_sequence=px.colors.sequential.Blues_r)
+                fig_hub = px.pie(df_filtered, names=hub_col, title="Répartition proportionnelle par Hub", hole=0.5, color_discrete_sequence=px.colors.sequential.Blues_r)
                 st.plotly_chart(fig_hub, use_container_width=True)
         with col_g2:
             if zs_col:
@@ -211,5 +240,5 @@ else:
                 st.plotly_chart(fig_zs, use_container_width=True)
 
     with tab3:
-        st.markdown("### 🔍 Base de Données Kobo Détaillée")
+        st.markdown("### 🔍 Base de Données Kobo Détaillée (Filtrée)")
         st.dataframe(df_filtered, use_container_width=True)
