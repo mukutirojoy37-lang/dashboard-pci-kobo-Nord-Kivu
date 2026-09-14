@@ -3,10 +3,9 @@ import pandas as pd
 import requests
 import plotly.express as px
 
-# Configuration de la page (Mode large pour un look dashboard pro)
+# Configuration de la page
 st.set_page_config(page_title="Dashboard PCI/WASH - Nord-Kivu", layout="wide", initial_sidebar_state="expanded")
 
-# Style CSS personnalisé pour un look épuré type Vercel/Enterprise
 st.markdown("""
     <style>
         .main { background-color: #f8f9fa; }
@@ -50,45 +49,46 @@ with st.spinner("Chargement des données en direct..."):
 if df.empty:
     st.warning("⚠️ Aucune donnée récupérée pour le moment. Vérifiez vos soumissions sur KoboToolbox.")
 else:
-    # --- BARRE LATÉRALE DE FILTRAGE ---
-    st.sidebar.header("🔍 Filtres & Paramètres")
-    
+    # Détection dynamique des colonnes Hub et Zone de Santé
     hub_col = next((col for col in df.columns if 'hub' in col.lower() or 'anten' in col.lower()), None)
     zs_col = next((col for col in df.columns if 'zone' in col.lower() or 'zs' in col.lower()), None)
 
+    # --- BARRE LATÉRALE DE FILTRAGE ---
+    st.sidebar.header("🔍 Filtres & Paramètres")
+    
     selected_hub = "Tous"
     if hub_col:
         hubs = list(df[hub_col].dropna().unique())
         selected_hub = st.sidebar.selectbox("Filtrer par Hub", ["Tous"] + hubs)
         if selected_hub != "Tous":
-            df = df[df[hub_col] == selected_hub]
+            df_filtered = df[df[hub_col] == selected_hub]
+    else:
+        df_filtered = df
 
     if zs_col:
-        zs_list = list(df[zs_col].dropna().unique())
+        zs_list = list(df_filtered[zs_col].dropna().unique())
         selected_zs = st.sidebar.selectbox("Filtrer par Zone de Santé", ["Toutes"] + zs_list)
         if selected_zs != "Toutes":
-            df = df[df[zs_col] == selected_zs]
+            df_filtered = df_filtered[df_filtered[zs_col] == selected_zs]
+    else:
+        df_filtered = df_filtered
 
-    # --- EN-TÊTE DE SYNTHÈSE (Cartes Pro) ---
+    # --- EN-TÊTE DE SYNTHÈSE ---
     st.markdown("### 📌 Synthèse Générale")
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        st.markdown(f'<div class="metric-card"><div class="metric-title">Total Rapports</div><div class="metric-value">{len(df)}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-title">Total Rapports</div><div class="metric-value">{len(df_filtered)}</div></div>', unsafe_allow_html=True)
     with c2:
-        hubs_count = df[hub_col].nunique() if hub_col else 0
+        hubs_count = df_filtered[hub_col].nunique() if hub_col else 0
         st.markdown(f'<div class="metric-card"><div class="metric-title">Hubs Actifs</div><div class="metric-value">{hubs_count}</div></div>', unsafe_allow_html=True)
     with c3:
-        zs_count = df[zs_col].nunique() if zs_col else 0
+        zs_count = df_filtered[zs_col].nunique() if zs_col else 0
         st.markdown(f'<div class="metric-card"><div class="metric-title">Zones de Santé</div><div class="metric-value">{zs_count}</div></div>', unsafe_allow_html=True)
     with c4:
         st.markdown(f'<div class="metric-card"><div class="metric-title">Connexion API</div><div class="metric-value" style="color: #10b981;">🟢 Active</div></div>', unsafe_allow_html=True)
 
-    # --- INDICATEURS CLÉS PCI / WASH ---
-    st.markdown("---")
-    st.markdown(f"### 📋 Tableau des Indicateurs Clés ({'Global' if selected_hub == 'Tous' else selected_hub})")
-    
-    # Définition des 7 indicateurs clés basés sur vos formulaires
-    indicators_def = [
+    # --- CALCUL EXACT DES INDICATEURS CLÉS (Basé sur les vraies colonnes Kobo) ---
+    indicators_mapping = [
         ("Proportion des PPL infectés parmi les cas confirmés d'Ebola", "planifie_ppl", "realise_ppl"),
         ("Proportion d'individus (non PPL) ayant contracté la MVE dans les ESS", "planifie_non_ppl", "realise_non_ppl"),
         ("Proportion d'ESS ayant un score > 80%", "planifie_ess", "realise_ess"),
@@ -98,25 +98,29 @@ else:
         ("Pourcentage du personnel de santé cible formé en PCI", "planifie_forme", "realise_forme")
     ]
 
-    # Construction dynamique d'un tableau propre pour l'affichage
     table_data = []
-    for label, col_p, col_r in indicators_def:
-        # Recherche flexible des colonnes dans le DataFrame Kobo
-        matched_p = next((c for c in df.columns if col_p in c.lower() or col_p.split('_')[1] in c.lower()), None)
-        matched_r = next((c for c in df.columns if col_r in c.lower() or col_r.split('_')[1] in c.lower()), None)
+    for label, key_p, key_r in indicators_mapping:
+        # Recherche des colonnes correspondantes dans le DataFrame Kobo
+        matched_p = next((c for c in df_filtered.columns if key_p in c.lower() or key_p.split('_')[1] in c.lower()), None)
+        matched_r = next((c for c in df_filtered.columns if key_r in c.lower() or key_r.split('_')[1] in c.lower()), None)
         
-        val_p = df[matched_p].sum() if matched_p and pd.api.types.is_numeric_dtype(df[matched_p]) else len(df) * 10 # Valeur par défaut simulée si colonnes vides
-        val_r = df[matched_r].sum() if matched_r and pd.api.types.is_numeric_dtype(df[matched_r]) else int(val_p * 0.75)
+        # Calcul des vraies sommes de terrain
+        val_p = float(df_filtered[matched_p].sum()) if matched_p and pd.api.types.is_numeric_dtype(df_filtered[matched_p]) else 0.0
+        val_r = float(df_filtered[matched_r].sum()) if matched_r and pd.api.types.is_numeric_dtype(df_filtered[matched_r]) else 0.0
         
         taux = round((val_r / val_p) * 100, 1) if val_p > 0 else 0.0
+        
         table_data.append({
             "Indicateur Clé PCI / WASH": label,
-            "Cible / Planifié": float(val_p),
-            "Réalisé": float(val_r),
+            "Cible / Planifié": val_p,
+            "Réalisé": val_r,
             "Taux de Réalisation (%)": f"{taux}%"
         })
 
     df_indicators = pd.DataFrame(table_data)
+    
+    st.markdown("---")
+    st.markdown(f"### 📋 Tableau des Indicateurs Clés ({'Global - Province' if selected_hub == 'Tous' else selected_hub})")
     st.dataframe(df_indicators, use_container_width=True, hide_index=True)
 
     # --- GRAPHIQUES ANALYTIQUES ---
@@ -130,9 +134,9 @@ else:
             st.plotly_chart(fig_hub, use_container_width=True)
     with col_g2:
         if zs_col:
-            fig_zs = px.bar(df, x=zs_col, color=hub_col if hub_col else None, title="Volume de soumissions par Zone de Santé", color_discrete_sequence=px.colors.qualitative.Prism)
+            fig_zs = px.bar(df_filtered, x=zs_col, color=hub_col if hub_col else None, title="Volume de soumissions par Zone de Santé", color_discrete_sequence=px.colors.qualitative.Prism)
             st.plotly_chart(fig_zs, use_container_width=True)
 
     # --- DONNÉES BRUTES ---
     with st.expander("🔍 Afficher les soumissions Kobo brutes détaillées"):
-        st.dataframe(df)
+        st.dataframe(df_filtered)
