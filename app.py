@@ -96,8 +96,8 @@ else:
 
     # --- CALCUL DES INDICATEURS CLÉS (Avec des libellés clairs et courts pour l'axe X) ---
     indicators_mapping = [
-        ("PPL Infecté (MVE)", "Proportion des PPL infectés (Ebola)", "ppl"),
-        ("Non PPL Infecté (MVE)", "Proportion non PPL (MVE dans ESS)", "non_ppl"),
+        ("Nbre PPL Infecté (MVE)", "Nbre des PPL infectés (Ebola)", "ppl"),
+        ("Nbre non PPL Infecté (MVE)", "Nbre non PPL (MVE dans ESS)", "non_ppl"),
         ("Score ESS > 80%", "Proportion ESS score > 80%", "score"),
         ("Dotation en Kit PCI", "Proportion ESS avec Kit PCI", "kit"),
         ("Triage fonctionnel", "Proportion ESS triage unidirectionnel", "triage"),
