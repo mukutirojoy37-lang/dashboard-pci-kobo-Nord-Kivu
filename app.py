@@ -25,7 +25,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("📊 Nord/Kivu — Tableau de Bord PCI/WASH — Suivi Opérationnel")
-st.markdown("Pilotage en temps réel des indicateurs clés par Hub, par Zone de Santé et par Période (KoboToolbox).")
+st.markdown("Pilotage en temps réel des indicateurs clés par Hub, par Zone de Santé et par Période.")
 
 # Paramètres API Kobo
 API_TOKEN = "d64887bad92383b600f2f520c44b0bc7c778c595"
